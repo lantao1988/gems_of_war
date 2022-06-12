@@ -58,6 +58,6 @@ TEST_F(GameTest, testMove) {
         {2,4,5}
     };
     Game game(map);
-    auto state = game.Move(Movement(make_pair(2,0), MT_RIGHT));
-    ASSERT_EQ(state, MS_OK);
+    auto state = game.Move(Movement(make_pair(2,0), MT_RIGHT), false);
+    ASSERT_EQ(state.state, MS_OK);
 }

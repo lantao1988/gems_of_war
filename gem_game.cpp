@@ -6,7 +6,7 @@
 #include <iostream>
 using namespace std;
 
-Game::Game(bool treasure, int rowMax, int colMax)
+Game::Game(bool treasure, int rowMax, int colMax, int seed)
     : row_max_(rowMax)
     , col_max_(colMax)
 {
@@ -15,18 +15,30 @@ Game::Game(bool treasure, int rowMax, int colMax)
     } else {
         collections_ = {GT_RED, GT_GREEN, GT_BROWN, GT_PURPLE, GT_BLUE, GT_YELLOW, GT_SKELETON};
     }
-    srand(time(NULL));
+    srand(time(NULL) * seed);
     map_.resize(rowMax);
-    for (int i = 0; i < map_.size(); ++i) {
+    for (size_t i = 0; i < map_.size(); ++i) {
         map_[i].resize(colMax);
-        for (int j = 0; j < map_[i].size(); ++j) {
+        for (size_t j = 0; j < map_[i].size(); ++j) {
             map_[i][j] = NewGem();
         }
     }
+    treasure_ = false;
+    auto gems = GemCollection();
+    while (true) {
+        CreateNewGems(gems, {INVALID_POS, INVALID_POS});
+        vector<Position> c;
+        FallDown(false, c);
+        gems = GemCollection();
+        if (gems.empty()) {
+            break;
+        }
+    }
+    treasure_ = treasure;
     /*
-    bool useless;
-    while (NextState(useless)) {}
-    (void)useless;
+      bool useless;
+      while (NextState(useless)) {}
+      (void)useless;
     */
 }
 
@@ -36,9 +48,9 @@ Game::Game(const vector<vector<int>> &map, const vector<int> &collections, bool 
     , col_max_(map[0].size())
 {
     map_.resize(row_max_);
-    for (int i = 0; i < map_.size(); ++i) {
+    for (size_t i = 0; i < map_.size(); ++i) {
         map_[i].resize(col_max_);
-        for (int j = 0; j < map_[i].size(); ++j) {
+        for (size_t j = 0; j < map_[i].size(); ++j) {
             map_[i][j] = (GemType)map[i][j];
         }
     }
@@ -93,33 +105,74 @@ void Game::CreateNewGems(const vector<vector<Position>> &gems,
     }
 }
 
-MoveState Game::Move(const Movement &movement) {
+int find(int x, const vector<int> &uset) {
+    while (x != uset[x]) {
+        x = uset[x];
+    }
+    return x;
+}
+
+MoveResult Game::Move(const Movement &movement, bool show) {
+    std::vector<std::pair<GameMap, std::vector<Position>>> snapshots;
     Position newPos = NewPos(movement.first, movement.second);
     if (!ValidPosition(newPos)) {
-        return MS_INVALID;
+        return {MS_INVALID, snapshots};
     }
     GemType &first = GetGem(movement.first);
     GemType &second = GetGem(newPos);
+
+    if (first == GT_DOOR || second == GT_DOOR) {
+        return {MS_INVALID, snapshots};
+    }
+    
+    vector<Position> movePos{movement.first, newPos};
+    if (show) {
+        snapshots.push_back({map_, movePos});
+    }
+
     std::swap(first, second);
 
     auto gems = GemCollection();
     if (gems.empty()) {
-        return MS_INVALID;
+        std::swap(first, second);
+        return {MS_INVALID, snapshots};
     }
 
-    vector<Position> movePos{movement.first, newPos};
+    MoveState state = MS_OK;
     while (true) {
+        if (state != MS_EXTERTURN) {
+            for (auto g : gems) {
+                if (g.size() > 4) {
+                    state = MS_EXTERTURN;
+                } else if (g.size() == 4) {
+                    state = MS_FOUR;
+                }
+            }
+        }
+        vector<Position> changedPos;
+        if (show) {
+            for (const auto &g: gems) {
+                changedPos.insert(changedPos.end(), g.begin(), g.end());
+            }
+            snapshots.push_back({map_, changedPos});
+        }
         CreateNewGems(gems, movePos);
         movePos.clear();
-        FallDown();
+        if (show) {
+            snapshots.push_back({map_, changedPos});
+        }
+        vector<Position> changed;
+        FallDown(show, changed);
+        if (show) {
+            snapshots.push_back({map_, changed});
+        }
         gems = GemCollection();
         if (gems.empty()) {
             break;
         }
     }
-    return MS_OK;
+    return {state, snapshots};
 }
-
 Position Game::NewPos(const Position& pos, MoveType moveType) const {
     switch(moveType) {
         case MT_UP:
@@ -159,20 +212,23 @@ vector<Position> Game::AllSameCollection(const Position &pos, MoveType type) con
 
 vector<vector<Position>> Game::GemCollection() const {
     vector<vector<Position>> gems;
-    vector<vector<pair<int, int>>> collectionIds(row_max_, vector<pair<int, int>>(col_max_, make_pair(-1, -1)));
+    vector<int> uset;
+    vector<vector<int>> collectionIds(row_max_, vector<int>(col_max_, -1));
     for (int i = 0; i < row_max_; ++i) {
         int len = 1;
-        for (int j = 0; j < col_max_; ++j) {
-            if (map_[i][j] != GT_EMPTY && j != col_max_ - 1 && map_[i][j+1] == map_[i][j+1-len]) {
+        for (int j = 1; j <= col_max_; ++j) {
+            if (j != col_max_ && map_[i][j] > 0 && map_[i][j] == map_[i][j-len]) {
                 len++;
             } else {
                 if (len < 3) {
+                    len = 1;
                     continue;
                 }
                 int id = gems.size();
+                uset.push_back(id);
                 vector<Position> collections;
-                for (int col = j+1-len; col <= j; ++col) {
-                    collectionIds[i][col].first = id;
+                for (int col = j-len; col < j; ++col) {
+                    collectionIds[i][col] = id;
                     collections.push_back(make_pair(i, col));
                 }
                 gems.push_back(collections);
@@ -182,18 +238,24 @@ vector<vector<Position>> Game::GemCollection() const {
     }
     for (int i = 0; i < col_max_; ++i) {
         int len = 1;
-        for (int j = 0; j < row_max_; ++j) {
-            if (map_[j][i] != GT_EMPTY && j != row_max_ - 1 && map_[j+1][i] == map_[j+1-len][i]) {
+        for (int j = 1; j <= row_max_; ++j) {
+            if (j != row_max_ && map_[j][i] > 0 && map_[j][i] == map_[j-len][i]) {
                 len++;
             } else {
                 if (len < 3) {
+                    len = 1;
                     continue;
                 }
                 
                 int id = gems.size();
+                uset.push_back(id);
                 vector<Position> collections;
-                for (int row = j+1-len; row <= j; ++row) {
-                    collectionIds[row][i].second = id;
+                for (int row = j-len; row < j; ++row) {
+                    if (collectionIds[row][i] != -1) {
+                        uset[find(collectionIds[row][i], uset)] = id;
+                    } else {
+                        collectionIds[row][i] = id;
+                    }
                     collections.push_back(make_pair(row, i));
                 }
                 gems.push_back(collections);
@@ -201,28 +263,10 @@ vector<vector<Position>> Game::GemCollection() const {
             }
         }
     }
-    vector<int> uset(gems.size());
-    for (int i = 0; i < uset.size(); ++i) {
-        uset[i] = i;
-    }
-    for (int i = 0; i < row_max_; ++i) {
-        for (int j = 0; j < col_max_; ++j) {
-            const pair<int, int> &ids = collectionIds[i][j];
-            if (ids.first != -1 && ids.second != -1) {
-                uset[uset[ids.first]] = uset[ids.second];
-            }
-        }
-    }
 
     map<int,set<Position>> result;
-    for (int i = 0; i < uset.size(); ++i) {
-        int id = i;
-        while (true) {
-            if (uset[id] == id) {
-                break;
-            }
-            id = uset[id];
-        }
+    for (size_t i = 0; i < uset.size(); ++i) {
+        int id = find(i, uset);
         set<Position> &target = result[id];
         target.insert(gems[i].begin(), gems[i].end());
     }
@@ -234,22 +278,27 @@ vector<vector<Position>> Game::GemCollection() const {
 
     return finalResult;
 }
-
-void Game::FallDown() {
+void Game::FallDown(bool show, vector<Position> &changed) {
     if (collections_.size() == 0) {
-        //test mode
+        //for predict mode
         return;
     }
 
     for (int col = 0; col < col_max_; ++col) {
         int cursor = row_max_ - 1;
-        for (int row = row_max_ - 1; row > 0; --row) {
+        for (int row = row_max_ - 1; row >= 0; --row) {
             if (map_[row][col] != GT_EMPTY) {
                 map_[cursor--][col] = map_[row][col];
             }
+            if (show && (cursor+1) != row) {
+                changed.push_back({row, col});
+            }
         }
-        for (int row = 0; row < cursor; ++row) {
+        for (int row = 0; row <= cursor; ++row) {
             map_[row][col] = NewGem();
+            if (show) {
+                changed.push_back({row, col});
+            }
         }
     }
 }
@@ -274,9 +323,102 @@ const GemType &Game::GetGem(const Position &pos) const {
 
 void Game::Show() const {
     for (int i = 0; i < row_max_; ++i) {
+        cout << '{';
         for (int j = 0; j < col_max_; ++j) {
-            cout << char('a' + map_[i][j]);
+            cout << (int(map_[i][j]) > 0 ? int(map_[i][j]) : 0);
+            if (j != col_max_ - 1) {
+                cout << ',';
+            }
         }
-        cout << endl;
-    } 
+        cout << "}," << endl;
+    }
+    cout << endl;
+}
+
+void add(uint64_t &org, uint64_t append) {
+    assert((append & 0x0f) == append);
+    org = (org << 4) | append;
+}
+
+vector<PredictResult> Game::AllValidMove() {
+    vector<PredictResult> ret;
+    std::vector<GemType> collections;
+    swap(collections_, collections);
+    for (int i = 0; i < row_max_; ++i) {
+        for (int j = 0; j < col_max_; ++j) {
+            {
+                vector<vector<GemType>> map = map_;
+                Movement movement({i, j}, MT_DOWN);
+                auto result = Move(movement, false);
+                if (result.state != MS_INVALID) {
+                    ret.push_back({movement, result, vector<vector<GemType>>()});
+                    swap(ret.rbegin()->map, map_);
+                }
+                swap(map, map_);
+            }
+            {
+                vector<vector<GemType>> map = map_;
+                Movement movement({i, j}, MT_RIGHT);
+                auto result = Move(movement, false);
+                if (result.state != MS_INVALID) {
+                    ret.push_back({movement, result, vector<vector<GemType>>()});
+                    swap(ret.rbegin()->map, map_);
+                }
+                swap(map, map_);
+            }
+        }
+    }
+
+    for (auto &result : ret) {
+        const auto &map = result.map;
+        auto &c33 = result.c33;
+        for (int i = 0; i < row_max_ - 3; ++i) {
+            for (int j = 0; j < col_max_ - 3; ++j) {
+                uint64_t x = 0;
+                add(x, map[i][j]);
+                add(x, map[i][j+1]);
+                add(x, map[i][j+2]);
+                
+                add(x, map[i+1][j]);
+                add(x, map[i+1][j+1]);
+                add(x, map[i+1][j+2]);
+                
+                add(x, map[i+2][j]);
+                add(x, map[i+2][j+1]);
+                add(x, map[i+2][j+2]);
+                c33.push_back(x);
+            }
+        }
+        // auto &c44 = result.c44;
+        // for (int i = 0; i < row_max_ - 4; ++i) {
+        //     for (int j = 0; j < col_max_ - 4; ++j) {
+        //         uint64_t x = 0;
+        //         add(x, map[i][j]);
+        //         add(x, map[i][j+1]);
+        //         add(x, map[i][j+2]);
+        //         add(x, map[i][j+3]);
+                
+        //         add(x, map[i+1][j]);
+        //         add(x, map[i+1][j+1]);
+        //         add(x, map[i+1][j+2]);
+        //         add(x, map[i+1][j+3]);
+                
+        //         add(x, map[i+2][j]);
+        //         add(x, map[i+2][j+1]);
+        //         add(x, map[i+2][j+2]);
+        //         add(x, map[i+2][j+3]);
+
+        //         add(x, map[i+3][j]);
+        //         add(x, map[i+3][j+1]);
+        //         add(x, map[i+3][j+2]);
+        //         add(x, map[i+3][j+3]);
+
+        //         c44.push_back(x);
+        //     }
+        // }
+        result.map.clear();
+    }
+    
+    swap(collections_, collections);
+    return ret;
 }

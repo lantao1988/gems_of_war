@@ -1,3 +1,5 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
+
 cc_library(
     name = "game",
     srcs = [
@@ -16,15 +18,21 @@ cc_test(
     ],
 )
 
-cc_binary(
-    name = "libgame.dll",
+pybind_extension(
+    name = "pybind",
     srcs = [
-        "gem_game.cpp",
-        "movement.h",
+        "pybind.cpp",
     ],
-    linkshared = True,
     linkstatic = True,
-    deps = [],
+    deps = [":game"],
+)
+
+pybind_extension(
+    name = "test_pybind",
+    srcs = [
+        "test_pybind.cpp",
+    ],
+    linkstatic = True,
 )
 
 cc_binary(
