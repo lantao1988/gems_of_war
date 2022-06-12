@@ -12,6 +12,7 @@ from model import GowGameModel
 #from torch.utils.tensorboard import SummaryWriter
 #from sklearn.metrics import roc_auc_score
 
+
 class myfloat(float):
     def __str__(self):
         return "%0.2f" % self.real
@@ -19,11 +20,13 @@ class myfloat(float):
     def __repr__(self):
         return "%0.2f" % self.real
 
+
 r_map = {
-    pybind.MS_EXTERTURN : 1,
-    pybind.MS_OK : -1,
-    pybind.MS_FOUR : 0
+    pybind.MS_EXTERTURN: 1,
+    pybind.MS_OK: -1,
+    pybind.MS_FOUR: 0
 }
+
 
 def run_once(param):
     epoch = param[0]
@@ -41,12 +44,13 @@ def run_once(param):
     org_reward = []
     lens = []
 
-    search_rate = 0.6 * (1.03 ** (0 - epoch)) + 0.3 if (epoch % 3 == 2) else 0.0
+    search_rate = 0.6 * (1.03 ** (0 - epoch)) + \
+        0.3 if (epoch % 3 == 2) else 0.0
     alpha = 0.7 * (1.03 ** (0 - epoch)) + 0.3
     with_random = epoch % 3
     with_random = 1
 
-    for r in range(500):
+    for r in range(100):
         # use_teacher = random.randint(0, 10) > 7 if (epoch % 5 == 1) else False
         # use_teacher = (epoch % 3) == 1
         use_teacher = False
@@ -67,7 +71,9 @@ def run_once(param):
         expect = [0] * len(reward)
         for i in range(len(reward) - 1, -1, -1):
             # discover_loss[i] += 0.9 * (discover_loss[i+1] if i != len(reward) - 1 else 0.0)
-            actual_reward = 0.95 * (expect[i+1] + discover_loss[i+1]) if i != len(reward) - 1 else -5.0
+            actual_reward = 0.95 * \
+                (expect[i+1] + discover_loss[i+1]
+                 ) if i != len(reward) - 1 else -5.0
             actual_reward += r_map[game.actual_states[i]]
             # if actual_reward > reward[i]:
             #     discover_loss[i] = 0
@@ -105,8 +111,9 @@ def run_game():
     set_start_method('spawn')
     for epoch in range(100000):
         begin = time.time()
-        if False:
-            counts, predicts, states, expect_reward, org_reward, lens = run_once((epoch, my_model))
+        if True:
+            counts, predicts, states, expect_reward, org_reward, lens = run_once(
+                (epoch, my_model))
         else:
             with Pool(10) as p:
                 examples = p.map(run_once, [(epoch, my_model)]*10)
@@ -132,7 +139,7 @@ def run_game():
         print([myfloat(x) for x in org_reward[0:lens[0]]])
         print([myfloat(x) for x in expect_reward[0:lens[0]]])
         for xx in range(3):
-            step = 100000
+            step = 10000
             for i in range(0, len(counts), step):
                 # writer.add_graph(my_model)
                 end = min(len(counts), i + step)
@@ -140,8 +147,10 @@ def run_game():
                                           torch.tensor(counts[i:end]),
                                           torch.tensor(predicts[i:end]))
 
-                loss = reward_loss_fn(reward, torch.tensor(expect_reward[i:end]).cuda())
-                print("[{:d}/{:d}], loss: {:.6f}".format(i, len(counts), loss.item()))
+                loss = reward_loss_fn(reward, torch.tensor(
+                    expect_reward[i:end]).cuda())
+                print("[{:d}/{:d}], loss: {:.6f}".format(i,
+                      len(counts), loss.item()))
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -152,6 +161,7 @@ def run_game():
 def main(argv):
     del argv  # Unused
     run_game()
+
 
 if __name__ == '__main__':
     app.run(main)
