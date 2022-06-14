@@ -372,8 +372,8 @@ vector<PredictResult> Game::AllValidMove() {
     for (auto &result : ret) {
         const auto &map = result.map;
         auto &c33 = result.c33;
-        for (int i = 0; i < row_max_ - 3; ++i) {
-            for (int j = 0; j < col_max_ - 3; ++j) {
+        for (int i = 0; i < row_max_ - 2; ++i) {
+            for (int j = 0; j < col_max_ - 2; ++j) {
                 uint64_t x = 0;
                 add(x, map[i][j]);
                 add(x, map[i][j+1]);

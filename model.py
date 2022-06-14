@@ -10,7 +10,7 @@ class GowGameModel(torch.nn.Module):
         #self.attention = torch.nn.MultiheadAttention(8, 1).cuda()
 
         self.network = torch.nn.Sequential(
-            torch.nn.Linear(8 * 36 + 32 + 16, 256),
+            torch.nn.Linear(8 * 49 + 32 + 16, 256),
             torch.nn.BatchNorm1d(256),
             torch.nn.Linear(256, 64),
             torch.nn.ReLU(),
