@@ -1,0 +1,2 @@
+build --action_env=CC=clang --action_env=CXX=clang++
+build --copt -g --copt -O0

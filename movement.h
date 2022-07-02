@@ -54,17 +54,10 @@ struct MoveResult {
 
 struct PredictResult {
     Movement movement;
-    MoveResult moveResult;
     GameMap map;
-    std::vector<uint64_t> c33;
-    std::vector<uint64_t> c44;
 };
 
 struct MoveOptions {
     bool showState = false;
 };
 
-struct PredictOptions {
-    bool needC33 = true;
-    bool needC44 = false;
-};

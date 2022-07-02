@@ -11,10 +11,6 @@ class GowGame(game_interface.GameInterface):
         self.game = pybind.Game(True, 9, 9, random.randint(0,1000000))
         self.count = 15
         self.total_step = 0
-        self.predicts = []
-        self.predict_states = []
-        self.counts = []
-        self.actual_states = []
 
     def all_valid_move(self, show=False):
         moves = self.game.AllValidMove()
@@ -29,7 +25,7 @@ class GowGame(game_interface.GameInterface):
             games.append((mp, {m.movement[0], self.game.NewPos(m.movement[0], m.movement[1])}, exter_info))
         self._print_games(games)
 
-    def play_move(self, move, train=False, show=True):
+    def play_move(self, move, show=True):
         assert(self.count > 0)
         self.total_step = self.total_step + 1
         if isinstance(move, pybind.PredictResult):
@@ -51,13 +47,11 @@ class GowGame(game_interface.GameInterface):
             self.count = self.count + 1
         elif state == pybind.MS_OK:
             self.count = self.count - 1
-        if train:
-            self.counts.append(self.count)
-            self.predict_states.append(int(move.moveResult.state))
-            self.predicts.append(move.c33)
-            self.actual_states.append(state)
+        elif state == pybind.MS_INVALID:
+            assert(False)
         if show:
             self._print_games(result.snapshots)
+        return state
 
     def _print_games(self, games):
         snapshots = games

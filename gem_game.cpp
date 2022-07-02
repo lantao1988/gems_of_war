@@ -114,30 +114,15 @@ int find(int x, const vector<int> &uset) {
 
 MoveResult Game::Move(const Movement &movement, bool show) {
     std::vector<std::pair<GameMap, std::vector<Position>>> snapshots;
+    vector<vector<Position>> gems;
+    if (!ValidMove(movement, true, gems)) {
+        return {MS_INVALID, snapshots};
+    }
     Position newPos = NewPos(movement.first, movement.second);
-    if (!ValidPosition(newPos)) {
-        return {MS_INVALID, snapshots};
-    }
-    GemType &first = GetGem(movement.first);
-    GemType &second = GetGem(newPos);
-
-    if (first == GT_DOOR || second == GT_DOOR) {
-        return {MS_INVALID, snapshots};
-    }
-    
     vector<Position> movePos{movement.first, newPos};
     if (show) {
         snapshots.push_back({map_, movePos});
     }
-
-    std::swap(first, second);
-
-    auto gems = GemCollection();
-    if (gems.empty()) {
-        std::swap(first, second);
-        return {MS_INVALID, snapshots};
-    }
-
     MoveState state = MS_OK;
     while (true) {
         if (state != MS_EXTERTURN) {
@@ -303,7 +288,29 @@ void Game::FallDown(bool show, vector<Position> &changed) {
     }
 }
 
-bool Game::ValidMove(const Movement &movement) {
+bool Game::ValidMove(const Movement &movement, bool doMove, vector<vector<Position>> &gems) {
+    std::vector<std::pair<GameMap, std::vector<Position>>> snapshots;
+    Position newPos = NewPos(movement.first, movement.second);
+    if (!ValidPosition(newPos)) {
+        return false;
+    }
+    GemType &first = GetGem(movement.first);
+    GemType &second = GetGem(newPos);
+
+    if (first == GT_DOOR || second == GT_DOOR) {
+        return false;
+    }
+    
+    std::swap(first, second);
+
+    gems = GemCollection();
+    if (gems.empty()) {
+        std::swap(first, second);
+        return false;
+    }
+    if (!doMove) {
+        std::swap(first, second);
+    }
     return true;
 }
 
@@ -342,83 +349,27 @@ void add(uint64_t &org, uint64_t append) {
 
 vector<PredictResult> Game::AllValidMove() {
     vector<PredictResult> ret;
-    std::vector<GemType> collections;
-    swap(collections_, collections);
+    vector<vector<Position>> gems;
     for (int i = 0; i < row_max_; ++i) {
         for (int j = 0; j < col_max_; ++j) {
             {
-                vector<vector<GemType>> map = map_;
                 Movement movement({i, j}, MT_DOWN);
-                auto result = Move(movement, false);
-                if (result.state != MS_INVALID) {
-                    ret.push_back({movement, result, vector<vector<GemType>>()});
-                    swap(ret.rbegin()->map, map_);
+                if (ValidMove(movement, false, gems)) {
+                    ret.push_back({movement, map_});
+                    auto &map = ret.rbegin()->map;
+                    swap(map[i][j], map[i+1][j]);
                 }
-                swap(map, map_);
             }
             {
-                vector<vector<GemType>> map = map_;
                 Movement movement({i, j}, MT_RIGHT);
-                auto result = Move(movement, false);
-                if (result.state != MS_INVALID) {
-                    ret.push_back({movement, result, vector<vector<GemType>>()});
-                    swap(ret.rbegin()->map, map_);
-                }
-                swap(map, map_);
+                if (ValidMove(movement, false, gems)) {
+                    ret.push_back({movement, map_});
+                    auto &map = ret.rbegin()->map;
+                    swap(map[i][j], map[i][j+1]);
+                }            
             }
         }
     }
 
-    for (auto &result : ret) {
-        const auto &map = result.map;
-        auto &c33 = result.c33;
-        for (int i = 0; i < row_max_ - 2; ++i) {
-            for (int j = 0; j < col_max_ - 2; ++j) {
-                uint64_t x = 0;
-                add(x, map[i][j]);
-                add(x, map[i][j+1]);
-                add(x, map[i][j+2]);
-                
-                add(x, map[i+1][j]);
-                add(x, map[i+1][j+1]);
-                add(x, map[i+1][j+2]);
-                
-                add(x, map[i+2][j]);
-                add(x, map[i+2][j+1]);
-                add(x, map[i+2][j+2]);
-                c33.push_back(x);
-            }
-        }
-        // auto &c44 = result.c44;
-        // for (int i = 0; i < row_max_ - 4; ++i) {
-        //     for (int j = 0; j < col_max_ - 4; ++j) {
-        //         uint64_t x = 0;
-        //         add(x, map[i][j]);
-        //         add(x, map[i][j+1]);
-        //         add(x, map[i][j+2]);
-        //         add(x, map[i][j+3]);
-                
-        //         add(x, map[i+1][j]);
-        //         add(x, map[i+1][j+1]);
-        //         add(x, map[i+1][j+2]);
-        //         add(x, map[i+1][j+3]);
-                
-        //         add(x, map[i+2][j]);
-        //         add(x, map[i+2][j+1]);
-        //         add(x, map[i+2][j+2]);
-        //         add(x, map[i+2][j+3]);
-
-        //         add(x, map[i+3][j]);
-        //         add(x, map[i+3][j+1]);
-        //         add(x, map[i+3][j+2]);
-        //         add(x, map[i+3][j+3]);
-
-        //         c44.push_back(x);
-        //     }
-        // }
-        result.map.clear();
-    }
-    
-    swap(collections_, collections);
     return ret;
 }

@@ -5,45 +5,39 @@ import random
 import torch
 
 class ModelPlayer(player_interface.PlayerInterface):
-    def __init__(self, model, use_teacher = False, with_random = 0, search_rate = 0.0):
+    def __init__(self, model, search_rate = 0.0):
         self.model = model
-        self.use_teacher = use_teacher
-        self.with_random = with_random
         self.search_rate = search_rate
-        # self.current_convert = torch.arange(0.0, 3.0).cuda()
-        # self.future_convert = torch.arange(0.0, 9.0).cuda()
+        self.current_convert = torch.arange(-1.0, 2.0).cuda()
         self.expect_reward = []
         self.discover_loss = []
+        self.maps = []
+        self.states = []
+        self.counts = []
 
     def next_move(self, current_state, valid_moves):
-        if self.use_teacher:
-            move = DefaultPlayer(self.with_random).next_move(
-                current_state, valid_moves)
-            for m in valid_moves:
-                if move.movement == m.movement:
-                    valid_moves = [m]
-                    break
-
-        moves = []
-        states = []
+        maps = []
+        counts = [current_state[0]] * len(valid_moves) 
         for m in valid_moves:
-            moves.append(m.c33)
-            states.append(int(m.moveResult.state))
+            maps.append(m.map)
 
-        reward = self.model(
-            torch.tensor(states),
-            torch.tensor([current_state[0]] * len(valid_moves)),
-            torch.tensor(moves))
+        predict, reward = self.model(torch.tensor(maps, dtype=int).cuda(),
+            torch.tensor(counts, dtype=int).cuda())
 
-        s = reward
+        s = reward + torch.matmul(torch.softmax(predict, dim=1), self.current_convert)
         self.expect_reward.append(s.max().item())
-        if not self.use_teacher and random.random() < self.search_rate:
-            s = torch.softmax(s, dim=0)
-            idx = random.choices(range(s.shape[0]), s)[0]
-            self.discover_loss.append(s.max().item() - s[idx].item())
-            return valid_moves[idx]
-        self.discover_loss.append(0.0)
-        return valid_moves[torch.argmax(s).item()]
+
+        if random.random() < self.search_rate:
+            idx = random.choices(range(s.shape[0]), torch.softmax(s, dim=0))[0]
+        else:
+            idx = torch.argmax(s).item()
+        self.discover_loss.append(s[idx].item() - s.max().item())
+        self.maps.append(valid_moves[idx].map)
+        return valid_moves[idx]
+
+    def collect_states(self, state, count):
+        self.states.append(int(state) - 1)
+        self.counts.append(count)
 
 
 class DefaultPlayer(player_interface.PlayerInterface):

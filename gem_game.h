@@ -24,8 +24,7 @@ public:
     void CreateNewGems(const std::vector<std::vector<Position>> &gems, 
                         const std::vector<Position> &movePos);
 private:
-    bool ValidMove(const Movement &movement);
-
+    bool ValidMove(const Movement &movement, bool doMove, std::vector<std::vector<Position>> &gems);
 
     GemType NewGem() const;
 

@@ -54,10 +54,7 @@ PYBIND11_MODULE(pybind, m) {
     py::class_<PredictResult>(m, "PredictResult")
         .def(py::init<>())
         .def_readwrite("movement", &PredictResult::movement)
-        .def_readwrite("moveResult", &PredictResult::moveResult)
-        .def_readwrite("map", &PredictResult::map)
-        .def_readwrite("c33", &PredictResult::c33)
-        .def_readwrite("c44", &PredictResult::c44);
+        .def_readwrite("map", &PredictResult::map);
 
     py::class_<MoveResult>(m, "MoveResult")
         .def(py::init<>())

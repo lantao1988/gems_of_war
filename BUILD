@@ -26,19 +26,3 @@ pybind_extension(
     linkstatic = True,
     deps = [":game"],
 )
-
-pybind_extension(
-    name = "test_pybind",
-    srcs = [
-        "test_pybind.cpp",
-    ],
-    linkstatic = True,
-)
-
-cc_binary(
-    name = "main",
-    srcs = ["main.cpp"],
-    deps = [
-        "game",
-    ],
-)
